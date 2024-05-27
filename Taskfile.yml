@@ -1,0 +1,73 @@
+---
+version: '3'
+
+includes:
+  remote:
+    taskfile: https://raw.githubusercontent.com/saydulaev/taskfile/v1.4.1/Taskfile.yml
+    internal: true
+    vars:
+      TASK_RUNTIME:
+        sh: echo "${TASK_RUNTIME:-devbox}"
+
+tasks:
+  terrascan:
+    desc: Detect compliance and security violations across Infrastructure as Code
+    summary: Detect compliance and security violations across Infrastructure as Code
+    cmds:
+      - task: remote:terraform:terrascan
+        
+  trivy*:
+    desc: Trivy scan config files for misconfigurations
+    summary: rivy scan config files for misconfigurations
+    cmds:
+      - task: remote:security:sast:trivy:config
+        vars:
+          FLAGS: '{{.MATCH | join " "}}'
+
+  checkov*:
+    desc: Checkov scan config files for misconfigurations
+    summary: |
+      Examples:
+      task "checkov --output cyclonedx"
+    cmds:
+      - task: remote:security:sast:checkov:scanner
+        vars:
+          FLAGS: '{{.MATCH | join " "}}'
+          CKV_FRAMEWORK: terraform
+
+  grype:
+    desc: Grype scan config files for misconfigurations
+    summary: ""
+    cmds:
+      - task: remote:security:sast:grype:scanner
+        vars:
+          GRYPE_OUTPUT: table
+          GRYPE_DB_AUTO_UPDATE: false
+
+  terraform-fmt*:
+    summary: terraform fmt
+    desc: terraform fmt
+    cmds:
+      - task: remote:terraform:fmt
+
+  terraform-validate*:
+    summary: terraform validate
+    desc: terraform validate
+    cmds:
+      - task: remote:terraform:validate
+        vars:
+          FLAGS: '{{.MATCH | join " "}}'
+
+  terraform-lint:
+    summary: Run tflint validation
+    desc: tflint
+    cmds:
+      - task: remote:terraform:tflint
+
+  terraform-doc:
+    summary: Gerenarate terraform documentation
+    desc: terraform-doc
+    cmds:
+      - task: remote:terraform:doc
+        vars:
+          FLAGS: '--output-file README.md'
