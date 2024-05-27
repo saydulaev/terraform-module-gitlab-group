@@ -4,7 +4,7 @@ variable "tier" {
   default     = "free"
   validation {
     condition     = contains(["free", "premium", "ultimate"], lower(var.tier))
-    error_message = "The tier value must be one of `free`, `premium`, `ultimate`"
+    error_message = "The tier value must be one of `free`, `premium`, `ultimate`."
   }
 }
 
@@ -51,17 +51,17 @@ variable "group" {
     wiki_access_level                 = optional(string)     // The group's wiki access level. Only available on Premium and Ultimate plans.
   })
   validation {
-    condition = var.group != null && var.group.default_branch_protection != null ? contains(
+    condition = var.group != null && try(var.group.default_branch_protection, null) != null ? contains(
     [0, 1, 2, 3, 4], var.group.default_branch_protection) : true
-    error_message = "Valid values are: 0, 1, 2, 3, 4"
+    error_message = "Valid values are: 0, 1, 2, 3, 4."
   }
   validation {
-    condition = var.group != null && var.group.project_creation_level != null ? contains(
+    condition = var.group != null && try(var.group.project_creation_level, null) != null ? contains(
     ["noone", "maintainer", "developer"], lower(var.group.project_creation_level)) : true
-    error_message = "Valid values are: noone, maintainer, developer"
+    error_message = "Valid values are: `noone`, `maintainer`, `developer`."
   }
   validation {
-    condition = var.group != null && var.group.shared_runners_setting != null ? contains(
+    condition = var.group != null && try(var.group.shared_runners_setting, null) != null ? contains(
       [
         "enabled", "disabled_and_overridable",
         "disabled_and_unoverridable",
@@ -69,26 +69,74 @@ variable "group" {
     ], lower(var.group.shared_runners_setting)) : true
     error_message = <<EOT
       Valid values are: 
-      enabled, disabled_and_overridable, 
-      disabled_and_unoverridable, disabled_with_override.
+      `enabled`, `disabled_and_overridable`, 
+      `disabled_and_unoverridable`, `disabled_with_override`.
       EOT
   }
   validation {
-    condition = var.group != null && var.group.subgroup_creation_level != null ? contains(
+    condition = var.group != null && try(var.group.subgroup_creation_level, null) != null ? contains(
     ["owner", "maintainer"], lower(var.group.subgroup_creation_level)) : true
-    error_message = "Valid values are: owner, maintainer."
+    error_message = "Valid values are: `owner`, `maintainer`."
   }
   validation {
-    condition = var.group != null && var.group.visibility_level != null ? contains(
+    condition = var.group != null && try(var.group.visibility_level, null) != null ? contains(
     ["private", "internal", "public"], lower(var.group.visibility_level)) : true
-    error_message = "Valid values are: private, internal, public."
+    error_message = "Valid values are: `private`, `internal`, `public`."
   }
   validation {
-    condition = var.group != null && var.group.wiki_access_level != null && can(regex("[A-Za-z]{7,}?", var.group.wiki_access_level)) ? (
+    condition = var.group != null && try(var.group.wiki_access_level, null) != null && can(regex("[A-Za-z]{7,}?", var.group.wiki_access_level)) ? (
       var.group.wiki_access_level == "disabled" ||
       var.group.wiki_access_level == "private" ||
     var.group.wiki_access_level == "enabled") : true
-    error_message = "Valid values are: disabled, private, enabled."
+    error_message = "Valid values are: `disabled`, `private`, `enabled`."
+  }
+  default = null
+}
+
+variable "access_token" {
+  description = "Configure group access token"
+  type = object({
+    group        = optional(string)          // The ID or full path of the group.
+    name         = optional(string)          // The name of the group access token.
+    scopes       = optional(set(string), []) // The scopes of the group access token.
+    access_level = optional(string, "maintainer")
+    expires_at   = optional(string) // When the token will expire, YYYY-MM-DD format.
+    rotation_configuration = optional(object({
+      expiration_days    = number // The duration (in days) the new token should be valid for.
+      rotate_before_days = number //  The duration (in days) before the expiration when the token should be rotated.
+    }))
+  })
+  validation {
+    condition = var.access_token != null && length(try(var.access_token.scopes, [])) > 0 ? alltrue([
+      for scope in var.access_token.scopes : contains(
+        [
+          "api", "read_api", "read_user", "k8s_proxy",
+          "read_registry", "write_registry", "read_repository", "write_repository",
+          "create_runner", "ai_features", "k8s_proxy", "read_observability",
+          "write_observability"
+        ],
+        scope
+      )
+    ]) : true
+    error_message = <<EOT
+      Valid values for scopes are: `api`, `read_api`, `read_user`, `k8s_proxy`, 
+      `read_registry`, `write_registry`, `read_repository`, `write_repository`, 
+      `create_runner`, `ai_features`, `k8s_proxy`, `read_observability`, 
+      `write_observability.`
+      EOT
+  }
+  validation {
+    condition = var.access_token != null && try(var.access_token.access_level, null) != null ? contains(
+      [
+        "no one", "minimal", "guest", "reporter",
+        "developer", "maintainer", "owner", "master"
+      ],
+      var.access_token.access_level
+    ) : true
+    error_message = <<EOT
+      Valid values for access_token.access_level are: `no one`, `minimal`, `guest`, `reporter`,
+      `developer`, `maintainer`, `owner`, `master`.
+      EOT
   }
   default = null
 }
@@ -122,7 +170,7 @@ variable "access_tokens" {
       Valid values are: api, read_api, read_user, k8s_proxy, 
       read_registry, write_registry, read_repository, write_repository, 
       create_runner, ai_features, k8s_proxy, read_observability, 
-      write_observability
+      write_observability.
       EOT
   }
   validation {
@@ -142,6 +190,17 @@ variable "access_tokens" {
   default = []
 }
 
+variable "badge" {
+  description = "Configure group badges."
+  type = object({
+    group     = string           // The id of the group to add the badge to.
+    image_url = string           // The image url which will be presented on group overview.
+    link_url  = string           // The url linked with the badge.
+    name      = optional(string) // The name of the badge.
+  })
+  default = null
+}
+
 variable "badges" {
   description = "Configure group badges."
   type = list(object({
@@ -151,7 +210,16 @@ variable "badges" {
     name      = optional(string) // The name of the badge.
   }))
   default = []
+}
 
+variable "custom_attribute" {
+  description = "Configure group custom attribute"
+  type = object({
+    group = number // The id of the group.
+    key   = string // Key for the Custom Attribute.
+    value = string // Value for the Custom Attribute.
+  })
+  default = null
 }
 
 variable "custom_attributes" {
@@ -164,6 +232,17 @@ variable "custom_attributes" {
   default = []
 }
 
+variable "label" {
+  description = "Group labels"
+  type = object({
+    color       = string           // The color of the label given in 6-digit hex notation with leading '#' sign (e.g. #FFAABB) or one of the CSS color names.
+    group       = string           // The name or id of the group to add the label 
+    name        = string           // The name of the label.
+    description = optional(string) // The description of the label.
+  })
+  default = null
+}
+
 variable "labels" {
   description = "Group labels"
   type = list(object({
@@ -173,6 +252,22 @@ variable "labels" {
     description = optional(string) // The description of the label.
   }))
   default = []
+}
+
+variable "variable" {
+  description = "Group variables"
+  type = object({
+    group             = string                      // The name or id of the group.
+    key               = string                      // The name of the variable.
+    value             = string                      // The value of the variable.
+    description       = optional(string)            // The description of the variable.
+    environment_scope = optional(string, "*")       //  The environment scope of the variable. 
+    masked            = optional(bool, false)       // Hide the value of the variable
+    protected         = optional(bool, false)       // Pass variable only protected branches and tags
+    raw               = optional(bool, false)       // Whether the variable is treated as a raw string
+    variable_type     = optional(string, "env_var") // The type of a variable. Valid values are: env_var, file
+  })
+  default = null
 }
 
 variable "variables" {
@@ -191,6 +286,18 @@ variable "variables" {
   default = []
 }
 
+variable "epic_board" {
+  description = "Group epic board"
+  type = object({
+    group = string // The ID or URL-encoded path of the group owned by the authenticated user.
+    name  = string // The name of the board.
+    lists = optional(list(object({
+      label_id = optional(string) // The ID of the label the list should be scoped to.
+    })))                          // The list of epic board lists
+  })
+  default = null
+}
+
 variable "epic_boards" {
   description = "Group epic boards"
   type = list(object({
@@ -200,8 +307,33 @@ variable "epic_boards" {
       label_id = optional(string) // The ID of the label the list should be scoped to.
     })))                          // The list of epic board lists
   }))
-  default  = null
-  nullable = true
+  default = []
+}
+
+variable "hook" {
+  description = "Group hook"
+  type = object({
+    group                      = string           // The ID or full path of the group.
+    url                        = string           // The url of the hook to invoke.
+    confidential_issues_events = optional(bool)   // Invoke the hook for confidential issues events.
+    confidential_note_events   = optional(bool)   // Invoke the hook for confidential notes events.
+    custom_webhook_template    = optional(string) // Set a custom webhook template.
+    deployment_events          = optional(bool)   // Invoke the hook for deployment events.
+    enable_ssl_verification    = optional(bool)   // Enable ssl verification when invoking the hook.
+    issues_events              = optional(bool)   // Invoke the hook for issues events.
+    job_events                 = optional(bool)   // Invoke the hook for job events.
+    merge_requests_events      = optional(bool)   // Invoke the hook for merge requests.
+    note_events                = optional(bool)   // Invoke the hook for notes events.
+    pipeline_events            = optional(bool)   // Invoke the hook for pipeline events.
+    push_events                = optional(bool)   // Invoke the hook for push events.
+    push_events_branch_filter  = optional(string) // Invoke the hook for push events on matching branches only.
+    releases_events            = optional(bool)   // Invoke the hook for releases events.
+    subgroup_events            = optional(bool)   // Invoke the hook for subgroup events.
+    tag_push_events            = optional(bool)   // Invoke the hook for tag push events.
+    token                      = optional(string) // A token to present when invoking the hook. The token is not available for imported resources.
+    wiki_page_events           = optional(bool)   // Invoke the hook for wiki page events.
+  })
+  default = null
 }
 
 variable "hooks" {
@@ -227,6 +359,21 @@ variable "hooks" {
     token                      = optional(string) // A token to present when invoking the hook. The token is not available for imported resources.
     wiki_page_events           = optional(bool)   // Invoke the hook for wiki page events.
   }))
+  default = []
+}
+
+variable "issue_board" {
+  description = "Group issue board"
+  type = object({
+    group  = string                     // The ID or URL-encoded path of the group owned by the authenticated user.
+    name   = string                     // The name of the board.
+    labels = optional(list(string), []) // The list of label names which the board should be scoped to.
+    lists = optional(list(object({
+      label_id = string             // The ID of the label the list should be scoped to.
+      position = optional(number)   // The explicit position of the list within the board, zero based.
+    })), [])                        // The list of issue board lists
+    milestone_id = optional(number) // The milestone the board should be scoped to.
+  })
   default = null
 }
 
@@ -242,7 +389,7 @@ variable "issue_boards" {
     })), [])                        // The list of issue board lists
     milestone_id = optional(number) // The milestone the board should be scoped to.
   }))
-  default = null
+  default = []
 }
 
 variable "ldap_link" {
@@ -265,7 +412,7 @@ variable "ldap_link" {
     ) : true
     error_message = <<EOT
       Valid values are: no one, minimal, guest, reporter, 
-      developer, maintainer, owner, master
+      developer, maintainer, owner, master.
       EOT
   }
   default = null
@@ -293,15 +440,37 @@ variable "membership" {
     )]) : true
     error_message = <<EOT
       Valid values are: no one, minimal, guest, reporter, 
-      developer, maintainer, owner, master
+      developer, maintainer, owner, master.
       EOT
   }
   default = []
+}
 
+variable "protected_environment" {
+  description = "Group protected environment"
+  type = object({
+    deploy_access_levels = list(object({
+      access_level           = optional(string) // Levels of access required to deploy to this protected environment. Valid values are developer, maintainer.
+      group_id               = optional(number) // The ID of the group allowed to deploy to this protected environment. The group must be a sub-group under the given group.
+      group_inheritance_type = optional(number) // Group inheritance allows deploy access levels to take inherited group membership into account. Valid values are 0, 1. 0
+      user_id                = optional(number) // The ID of the user allowed to deploy to this protected environment.
+    }))                                         // Array of access levels allowed to deploy
+    environment = string                        // The deployment tier of the environment. Valid values are production, staging, testing, development, other
+    group       = string                        // The ID or full path of the group which the protected environment is created against.
+    approval_rules = optional(list(object({
+      access_level           = optional(string)    // Levels of access allowed to approve a deployment to this protected environment. Valid values are developer, maintainer
+      group_id               = optional(number)    // The ID of the group allowed to approve a deployment to this protected environment. The group must be a sub-group under the given group.
+      group_inheritance_type = optional(number, 0) // Group inheritance allows access rules to take inherited group membership into account. Valid values are 0, 1. 0
+      required_approvals     = optional(number)    // The number of approval required to allow deployment to this protected environment. 
+      user_id                = optional(string)    // The ID of the user allowed to approve a deployment to this protected environment.
+    })))                                           // Array of approval rules to deploy
+    required_approval_count = optional(number)     // The number of approvals required to deploy to this environment.
+  })
+  default = null
 }
 
 variable "protected_environments" {
-  description = "Group protected environment"
+  description = "Group protected environments"
   type = list(object({
     deploy_access_levels = list(object({
       access_level           = optional(string) // Levels of access required to deploy to this protected environment. Valid values are developer, maintainer.
@@ -341,6 +510,30 @@ variable "saml_link" {
 
 }
 
+variable "share_group" {
+  description = "Group share with another group"
+  type = object({
+    group_access   = string           // The access level to grant the group. Valid values are: no one, minimal, guest, reporter, developer, maintainer, owner, master
+    group_id       = string           // The id of the main group to be shared.
+    share_group_id = string           // The id of the additional group with which the main group will be shared.
+    expires_at     = optional(string) // Share expiration date. Format: YYYY-MM-DD
+  })
+  validation {
+    condition = var.share_group != null ? contains(
+      [
+        "no one", "minimal", "guest", "reporter",
+        "developer", "maintainer", "owner", "master"
+      ],
+      var.share_group.group_access
+    ) : true
+    error_message = <<EOT
+      Valid values for share_group.group_access are: `no one`, `minimal`,
+      `guest`, `reporter`, `developer`, `maintainer`, `owner`, `master`.
+      EOT
+  }
+  default = null
+}
+
 variable "share_groups" {
   description = "Group share with another group"
   type = list(object({
@@ -360,10 +553,23 @@ variable "share_groups" {
     )]) : true
     error_message = <<EOT
       Valid values are: no one, minimal, guest, reporter, 
-      developer, maintainer, owner, master
+      developer, maintainer, owner, master.
       EOT
   }
   default = []
+}
+
+variable "deploy_token" {
+  description = "Group deploy token"
+  type = object({
+    name       = string           // A name to describe the deploy token with.
+    scopes     = list(string)     // Valid values: read_repository, read_registry, read_package_registry, write_registry, write_package_registry.
+    expires_at = optional(string) // Time the token will expire it, RFC3339 format.
+    group      = optional(string) // The name or id of the group to add the deploy token to.
+    project    = optional(string) // The name or id of the project to add the deploy token to.
+    username   = optional(string) // A username for the deploy token. Default is gitlab+deploy-token-{n}
+  })
+  default = null
 }
 
 variable "deploy_tokens" {
@@ -377,6 +583,19 @@ variable "deploy_tokens" {
     username   = optional(string) // A username for the deploy token. Default is gitlab+deploy-token-{n}
   }))
   default = []
+}
+
+variable "compliance_framework" {
+  description = "Manage the lifecycle of a compliance framework on top-level groups"
+  type = object({
+    color                            = string                // New color representation of the compliance framework in hex format. e.g. #FCA121.
+    description                      = string                // Description for the compliance framework.
+    name                             = string                // Name for the compliance framework.
+    namespace_path                   = string                // Full path of the namespace to add the compliance framework to.
+    default                          = optional(bool, false) // Set this compliance framework as the default framework for the group
+    pipeline_configuration_full_path = optional(string)      // Full path of the compliance pipeline configuration stored in a project repository, such as .gitlab/.compliance-gitlab-ci.yml@compliance/hipaa
+  })
+  default = null
 }
 
 variable "compliance_frameworks" {

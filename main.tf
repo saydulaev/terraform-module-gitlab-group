@@ -1,5 +1,5 @@
 resource "gitlab_group" "this" {
-  count = var.group != null && length(keys(var.group)) > 0 ? 1 : 0
+  count = var.group != null ? 1 : 0
 
   name                               = var.group.name
   path                               = var.group.path
@@ -45,7 +45,21 @@ resource "gitlab_group" "this" {
   wiki_access_level                 = contains(["premium", "ultimate"], lower(var.tier)) ? var.group.wiki_access_level : null
 }
 
-resource "gitlab_group_access_token" "this" {
+resource "gitlab_group_access_token" "token" {
+  count = var.access_token != null ? 1 : 0
+
+  group        = coalesce(var.access_token.group, one(gitlab_group.this[*].id)) // try(each.value.group, gitlab_group.this.id)
+  name         = var.access_token.name
+  scopes       = var.access_token.scopes
+  access_level = var.access_token.access_level
+  expires_at   = var.access_token.expires_at
+  rotation_configuration = var.access_token.rotation_configuration != null ? {
+    expiration_days    = try(var.access_token.rotation_configuration.expiration_days, null)
+    rotate_before_days = try(var.access_token.rotation_configuration.rotate_before_days, null)
+  } : null
+}
+
+resource "gitlab_group_access_token" "tokens" {
   for_each = {
     for token in var.access_tokens : token.name => token
     if length(var.access_tokens) > 0
@@ -62,7 +76,16 @@ resource "gitlab_group_access_token" "this" {
   } : null
 }
 
-resource "gitlab_group_badge" "this" {
+resource "gitlab_group_badge" "badge" {
+  count = var.badge != null ? 1 : 0
+
+  group     = coalesce(var.badge.group, one(gitlab_group.this[*].id))
+  link_url  = var.badge.link_url
+  image_url = var.badge.image_url
+  name      = var.badge.name
+}
+
+resource "gitlab_group_badge" "badges" {
   for_each = {
     for badge in var.badges : badge.link_url => badge
     if length(var.badges) > 0
@@ -74,7 +97,15 @@ resource "gitlab_group_badge" "this" {
   name      = each.value.name
 }
 
-resource "gitlab_group_custom_attribute" "this" {
+resource "gitlab_group_custom_attribute" "attribute" {
+  count = var.custom_attribute != null ? 1 : 0
+
+  group = coalesce(var.custom_attribute.group, one(gitlab_group.this[*].id))
+  key   = var.custom_attribute.key
+  value = var.custom_attribute.value
+}
+
+resource "gitlab_group_custom_attribute" "attributes" {
   for_each = {
     for attr in var.custom_attributes : attr.key => attr
     if length(var.custom_attributes) > 0
@@ -85,7 +116,16 @@ resource "gitlab_group_custom_attribute" "this" {
   value = each.value.value
 }
 
-resource "gitlab_group_label" "this" {
+resource "gitlab_group_label" "label" {
+  count = var.label != null ? 1 : 0
+
+  group       = coalesce(var.label.group, one(gitlab_group.this[*].id))
+  name        = var.label.name
+  description = var.label.description
+  color       = var.label.color
+}
+
+resource "gitlab_group_label" "labels" {
   for_each = {
     for label in var.labels : label.name => label
     if length(var.labels) > 0
@@ -97,7 +137,21 @@ resource "gitlab_group_label" "this" {
   color       = each.value.color
 }
 
-resource "gitlab_group_epic_board" "this" {
+resource "gitlab_group_epic_board" "epic_board" {
+  count = var.epic_board != null ? 1 : 0
+
+  name  = var.epic_board.name
+  group = coalesce(var.epic_board.group, one(gitlab_group.this[*].id))
+  dynamic "lists" {
+    for_each = length(var.epic_board.lists) > 0 ? toset(var.epic_board.lists) : []
+    iterator = rule
+    content {
+      label_id = tonumber(gitlab_group_label.this[rule.value.label_id].label_id)
+    }
+  }
+}
+
+resource "gitlab_group_epic_board" "epic_boards" {
   for_each = {
     for board in var.epic_boards : board.name => board
     if length(var.epic_boards) > 0 && contains(["premium", "ultimate"], lower(var.tier))
@@ -114,7 +168,31 @@ resource "gitlab_group_epic_board" "this" {
   }
 }
 
-resource "gitlab_group_hook" "this" {
+resource "gitlab_group_hook" "hook" {
+  count = var.hook != null ? 1 : 0
+
+  group                      = coalesce(var.hook.group, one(gitlab_group.this[*].id))
+  url                        = var.hook.url
+  confidential_issues_events = var.hook.confidential_issues_events
+  confidential_note_events   = var.hook.confidential_note_events
+  custom_webhook_template    = var.hook.custom_webhook_template
+  deployment_events          = var.hook.deployment_events
+  enable_ssl_verification    = var.hook.enable_ssl_verification
+  issues_events              = var.hook.issues_events
+  job_events                 = var.hook.job_events
+  merge_requests_events      = var.hook.merge_requests_events
+  note_events                = var.hook.note_events
+  pipeline_events            = var.hook.pipeline_events
+  push_events                = var.hook.push_events
+  push_events_branch_filter  = var.hook.push_events_branch_filter
+  releases_events            = var.hook.releases_events
+  subgroup_events            = var.hook.subgroup_events
+  tag_push_events            = var.hook.tag_push_events
+  token                      = var.hook.token
+  wiki_page_events           = var.hook.wiki_page_events
+}
+
+resource "gitlab_group_hook" "hooks" {
   for_each = {
     for hook in var.hooks : hook.url => hook
     if length(var.hooks) > 0 && contains(["premium", "ultimate"], lower(var.tier))
@@ -141,7 +219,24 @@ resource "gitlab_group_hook" "this" {
   wiki_page_events           = each.value.wiki_page_events
 }
 
-resource "gitlab_group_issue_board" "this" {
+resource "gitlab_group_issue_board" "issue_board" {
+  count = var.issue_board != null ? 1 : 0
+
+  name   = var.issue_board.name
+  group  = coalesce(var.issue_board.group, one(gitlab_group.this[*].id))
+  labels = var.issue_board.labels
+  dynamic "lists" {
+    for_each = length(var.issue_board.lists) > 0 ? toset(var.issue_board.lists) : []
+    iterator = rule
+    content {
+      label_id = coalesce(gitlab_group_label.labels[rule.value.label_id].label_id, one(gitlab_group_label.label[*].id))
+      position = rule.value.position
+    }
+  }
+  milestone_id = var.issue_board.milestone_id
+}
+
+resource "gitlab_group_issue_board" "issue_boards" {
   for_each = {
     for board in var.issue_boards : board.name => board
     if length(var.issue_boards) > 0
@@ -154,14 +249,11 @@ resource "gitlab_group_issue_board" "this" {
     for_each = length(each.value.lists) > 0 ? toset(each.value.lists) : []
     iterator = rule
     content {
-      label_id = gitlab_group_label.this[rule.value.label_id].label_id
+      label_id = coalesce(gitlab_group_label.labels[rule.value.label_id].label_id, one(gitlab_group_label.label[*].id)) //gitlab_group_label.this[rule.value.label_id].label_id
       position = rule.value.position
     }
   }
   milestone_id = each.value.milestone_id
-  depends_on = [
-    gitlab_group_label.this
-  ]
 }
 
 resource "gitlab_group_ldap_link" "this" {
@@ -205,7 +297,7 @@ resource "gitlab_group_membership" "this" {
   group_id                      = coalesce(each.value.group_id, one(gitlab_group.this[*].id))
   user_id                       = data.gitlab_user.membership_user[each.value.user_id].id
   expires_at                    = each.value.expires_at
-  member_role_id                = each.value.member_role_id
+  member_role_id                = contains(["premium", "ultimate"], lower(var.tier)) ? each.value.member_role_id : null
   skip_subresources_on_destroy  = each.value.skip_subresources_on_destroy
   unassign_issuables_on_destroy = each.value.unassign_issuables_on_destroy
 }
@@ -221,7 +313,17 @@ resource "gitlab_group_membership" "this" {
 //   depends_on               = [gitlab_group.this]
 // }
 
-resource "gitlab_group_protected_environment" "this" {
+resource "gitlab_group_protected_environment" "protected_environment" {
+  count = var.protected_environment != null ? 1 : 0
+
+  deploy_access_levels    = var.protected_environment.deploy_access_levels
+  environment             = var.protected_environment.environment
+  group                   = coalesce(var.protected_environment.group, one(gitlab_group.this[*].id))
+  approval_rules          = var.protected_environment.approval_rules
+  required_approval_count = var.protected_environment.required_approval_count
+}
+
+resource "gitlab_group_protected_environment" "protected_environments" {
   for_each = {
     for env in var.protected_environments : env.environment => env
     if length(var.protected_environments) > 0 && contains(["premium", "ultimate"], lower(var.tier))
@@ -242,7 +344,21 @@ resource "gitlab_group_saml_link" "this" {
   saml_group_name = var.saml_link.saml_group_name
 }
 
-resource "gitlab_group_variable" "this" {
+resource "gitlab_group_variable" "variable" {
+  count = var.variable != null ? 1 : 0
+
+  group             = coalesce(var.variable.group, one(gitlab_group.this[*].id))
+  key               = var.variable.key
+  value             = var.variable.value
+  protected         = var.variable.protected
+  masked            = var.variable.masked
+  environment_scope = var.variable.environment_scope
+  description       = var.variable.description
+  raw               = var.variable.raw
+  variable_type     = var.variable.variable_type
+}
+
+resource "gitlab_group_variable" "variables" {
   for_each = {
     for v in var.variables : v.key => v
     if length(var.variables) > 0
@@ -259,7 +375,17 @@ resource "gitlab_group_variable" "this" {
   variable_type     = each.value.variable_type
 }
 
-resource "gitlab_deploy_token" "this" {
+resource "gitlab_deploy_token" "deploy_token" {
+  count = var.deploy_token != null ? 1 : 0
+
+  group      = coalesce(var.deploy_token.group, one(gitlab_group.this[*].id))
+  name       = var.deploy_token.name
+  scopes     = var.deploy_token.scopes
+  expires_at = var.deploy_token.expires_at
+  username   = var.deploy_token.username
+}
+
+resource "gitlab_deploy_token" "deploy_tokens" {
   for_each = {
     for token in var.deploy_tokens : token.name => token
     if length(var.deploy_tokens) > 0
